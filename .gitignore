@@ -1,0 +1,16 @@
+/target/
+.idea/
+*.iml
+.DS_Store
+*.class
+*.log
+*.asc
+*.key
+*.p12
+.env
+.env.*
+settings.xml
+settings-security.xml
+/src/test/resources/*.stats.json
+/INDEPENDENT_REVIEW.md
+/scripts/LongKeyAllocationProbe.java
