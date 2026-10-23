@@ -1,14 +1,27 @@
 # Fractional Indexing for Java
 
-Java 8+ 字符串排序键库，移植自 rocicorp/fractional-indexing 的默认编码。
-适用于 PPT 页面、任务卡片等有序列表：插入或移动时，通常只修改受影响记录的排序键。
+**在列表中插入或移动一条记录，通常只需保存这条记录的排序键，无需批量修改其他记录的序号。**
 
-- Java 8 起支持，零运行时第三方依赖。
+这是一个 Java 分数索引（Fractional Indexing）库，适用于任务看板、拖拽排序、播放列表等
+需要自定义顺序的场景。它根据相邻记录的排序键生成新键，让新记录排在指定位置。
+
+例如，已有两条记录的排序键为 `a0` 和 `a1`，在它们之间插入一条记录：
+
+```java
+String key = FractionalIndexing.generateKeyBetween("a0", "a1"); // a0V
+```
+
+按字符串顺序排列就是 `a0 < a0V < a1`，原有两条记录的排序键都不需要修改。
+
 - 支持头部、尾部、中间插入，以及一次批量生成多个有序键。
+- 支持 Java 8+，无运行时第三方依赖，可用于普通 Java 或 Spring 应用。
 - 默认每个排序键最多 128 字符、每批最多 10,000 个键，均可按调用配置。
-- 无数据库、Spring、Node.js 运行时依赖。
-- 采用 CC0-1.0；这是独立 Java 移植项目，并非 Rocicorp 官方 Java 版本。
-- 固定上游提交、兼容范围及边界修复见 [UPSTREAM.md](UPSTREAM.md)。
+
+排序键在反复向同一间隙插入时会增长；达到长度限制时需由业务层整理，详见下文。
+并发控制与数据持久化也由业务层负责。
+
+本库移植自 rocicorp/fractional-indexing 的默认编码，采用 CC0-1.0，属于独立 Java 移植项目。
+固定上游提交、兼容范围及边界修复见 [UPSTREAM.md](UPSTREAM.md)。
 
 ## 构建
 
@@ -49,8 +62,8 @@ List<String> end = FractionalIndexing.generateNKeysBetween("a0", null, 3);
 // [a1, a2, a3]
 ```
 
-`null` 表示这一侧没有页面。`left`、`right` 都非空时必须满足 `left < right`；
-批量结果按升序排列，依次绑定前端数组里的页面即可。`count == 0` 返回空列表。
+`null` 表示这一侧没有相邻记录。`left`、`right` 都非空时必须满足 `left < right`；
+批量结果按升序排列，依次绑定待插入的记录即可。`count == 0` 返回空列表。
 无效键、相等或逆序边界、负数数量抛出 `IllegalArgumentException`。
 `A1` 不是合法键；头字符有长度含义，不能任意构造键。
 
@@ -149,7 +162,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
-public class SlideOrderService {
+public class ListOrderService {
     // Spring未配置这些属性时，分别回退到128和10000
     @Value("${fractional-indexing.max-key-length:128}")
     private int maxKeyLength;
@@ -168,8 +181,8 @@ public class SlideOrderService {
 }
 ```
 
-其他 Spring 组件注入 `SlideOrderService` 后，调用 `newKey`/`newKeys`，就会使用配置中的
-256字符和1000个上限。不要自己 `new SlideOrderService()`，否则不会获得 Spring 属性注入。
+其他 Spring 组件注入 `ListOrderService` 后，调用 `newKey`/`newKeys`，就会使用配置中的
+256字符和1000个上限。不要自己 `new ListOrderService()`，否则不会获得 Spring 属性注入。
 
 **只有把配置值传给重载方法，配置才会影响库的行为。** 即使 YAML 配了256，下面的
 两参数调用仍使用库默认的128：
@@ -187,12 +200,12 @@ FractionalIndexing.generateKeyBetween(left, right); // 仍然是128
 
 排序规则必须与 Java `String.compareTo` 一致。默认编码仅包含 ASCII 字母数字；
 MySQL 字段可采用 `VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin`，
-配合文档 ID 与排序键的联合索引。该容量与库的默认长度上限一致；如调整库配置，需同步检查字段容量。
+配合列表 ID 与排序键的联合索引。该容量与库的默认长度上限一致；如调整库配置，需同步检查字段容量。
 避免忽略大小写的排序规则，前端也不要使用依赖语言区域的 `localeCompare`。
 
-在业务层读取当前相邻页面后计算排序键。移动页面时先从逻辑顺序中排除被移动页。
-相同输入会生成相同输出：本库**不解决并发冲突**。调用方需要在文档锁/数据库事务中
-分配和保存，或使用修订号检查并重试。不要把排序键当作页面 ID 或显示页码。
+在业务层读取当前相邻记录后计算排序键。移动记录时先从逻辑顺序中排除该记录。
+相同输入会生成相同输出：本库**不解决并发冲突**。调用方需要在列表级锁/数据库事务中
+分配和保存，或使用修订号检查并重试。不要把排序键当作记录 ID 或显示序号。
 
 ## 长度增长和整理
 
@@ -201,10 +214,10 @@ MySQL 字段可采用 `VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin`，
 
 | 操作 | 首次达到 32 字符 |
 | --- | --- |
-| 每次紧挨左边界新增一页 | 第 175 次 |
-| 每次紧挨右边界新增一页 | 第 146 次 |
-| 每批三页，持续紧挨左边界 | 第 88 批 |
-| 每批三页，持续紧挨右边界 | 第 73 批 |
+| 每次紧挨左边界新增一条记录 | 第 175 次 |
+| 每次紧挨右边界新增一条记录 | 第 146 次 |
+| 每批三条记录，持续紧挨左边界 | 第 88 批 |
+| 每批三条记录，持续紧挨右边界 | 第 73 批 |
 
 一次在 `a0/a1` 中间批量生成 1000 个键，最长 4 字符；显式将批量上限提高至 100000 时，
 生成 100000 个键的最大长度为 6 字符。
@@ -213,12 +226,12 @@ MySQL 字段可采用 `VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin`，
 本库执行上述硬限制，但不改写其他记录。调用方可在达到业务预警阈值时提前整理，
 或在捕获 `KeyLengthExceededException` 后处理：
 
-1. 在文档级并发保护下读取当前页面顺序。
-2. `generateNKeysBetween(null, null, pageCount)` 生成一组新键；超过默认批量上限时，
+1. 在列表级并发保护下读取当前记录顺序。
+2. `generateNKeysBetween(null, null, itemCount)` 生成一组新键；超过默认批量上限时，
    明确配置更合适的上限或设计分批处理。
-3. 将页面按当前顺序绑定新键，在同一事务中保存，并重新计算本次操作的位置。
+3. 将记录按当前顺序绑定新键，在同一事务中保存，并重新计算本次操作的位置。
 
-整理只改变排序键，不需要改页面 ID 或正文。如果数据库设了排序键唯一约束，需要
+整理只改变排序键，不需要改记录 ID 或业务内容。如果数据库设了排序键唯一约束，需要
 处理逐行更新时的新旧键冲突；不能假定事务本身会绕过唯一约束。
 应用层仍需限制请求正文大小和请求频率。
 
