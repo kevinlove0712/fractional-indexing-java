@@ -1,9 +1,10 @@
 # Fractional Indexing for Java
 
-**在列表中插入或移动一条记录，通常只需保存这条记录的排序键，无需批量修改其他记录的序号。**
+**在列表任意位置插入记录，无需修改其他记录的排序键。**
 
-这是一个 Java 分数索引（Fractional Indexing）库，适用于任务看板、拖拽排序、播放列表等
-需要自定义顺序的场景。它根据相邻记录的排序键生成新键，让新记录排在指定位置。
+这是一个 Java 分数索引（Fractional Indexing）库：根据插入位置两侧的排序键生成新键，
+让新记录排在指定位置，已有记录的排序键保持不变。支持头部、尾部、中间插入及批量插入，
+适用于任务看板、拖拽排序、播放列表等需要自定义顺序的场景。
 
 例如，已有两条记录的排序键为 `a0` 和 `a1`，在它们之间插入一条记录：
 
@@ -20,8 +21,9 @@ String key = FractionalIndexing.generateKeyBetween("a0", "a1"); // a0V
 排序键在反复向同一间隙插入时会增长；达到长度限制时需由业务层整理，详见下文。
 并发控制与数据持久化也由业务层负责。
 
-本库移植自 rocicorp/fractional-indexing 的默认编码，采用 CC0-1.0，属于独立 Java 移植项目。
-固定上游提交、兼容范围及边界修复见 [UPSTREAM.md](UPSTREAM.md)。
+**项目来源：** 基于 [rocicorp/fractional-indexing](https://github.com/rocicorp/fractional-indexing)
+的默认编码实现移植，属于独立 Java 项目，并非 Rocicorp 官方 Java 版本。上游及本项目均采用
+[CC0-1.0](LICENSE)。固定上游提交、原始源码、兼容范围及边界修复见 [UPSTREAM.md](UPSTREAM.md)。
 
 ## 构建
 
