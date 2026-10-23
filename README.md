@@ -252,8 +252,25 @@ mvn test
 累计分配量随输入长度线性增长（需要 JVM 提供线程分配计数，否则明确跳过）。
 额外覆盖默认/自定义上限、边界值、生成超限、批量中途超限及无效配置。
 超长键和超大批量算法测试显式提高配置，原对照语料保持不变。
+还包含三字符合法键域穷举、独立数学顺序模型、语法变异、百万字符长键，以及超限输出在完整构造前拒绝的分配量回归测试。
 已在本地 JDK 8u462 和 JDK 21.0.1 下通过全部回归测试，均无跳过；产物字节码版本为 52（Java 8）。
 GitHub Actions 配置了 Java 8/21 的测试矩阵。
+
+可选的动态上游差分检查会现场生成输入，不读取固定 TSV 样例。设置 `JAVA_HOME` 后运行
+（需要 Node.js 18+；`exhaustive` 枚举固定整数部分 `a0` 下最多两位小数的边界组合，耗时更长）：
+
+```sh
+mkdir -p target/differential
+"$JAVA_HOME/bin/javac" -encoding UTF-8 -cp target/classes \
+  -d target/differential scripts/review/DifferentialRunner.java
+node scripts/review/differential.mjs "$JAVA_HOME/bin/java" \
+  target/differential:target/classes random random target/differential
+node scripts/review/differential.mjs "$JAVA_HOME/bin/java" \
+  target/differential:target/classes exhaustive exhaustive target/differential
+```
+
+先运行 `mvn clean verify` 生成 `target/classes`；Windows 的 classpath 分隔符改用 `;`。
+结果写入被 Git 忽略的 `target/differential/`，发现非预期差异时脚本以非零状态退出。
 
 ## 开源与发布
 
